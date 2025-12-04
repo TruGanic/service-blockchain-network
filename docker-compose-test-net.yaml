@@ -40,6 +40,8 @@ services:
     hostname: orderer.example.com
     environment:
       - FABRIC_LOGGING_SPEC=INFO
+      - ORDERER_GENERAL_BOOTSTRAPMETHOD=file
+      - ORDERER_GENERAL_BOOTSTRAPFILE=/var/hyperledger/orderer/orderer.genesis.block
       - ORDERER_GENERAL_LISTENADDRESS=0.0.0.0
       - ORDERER_GENERAL_LISTENPORT=7050
       - ORDERER_GENERAL_TLS_ENABLED=true
@@ -66,6 +68,8 @@ services:
       - ./crypto-config/ordererOrganizations/example.com/orderers/orderer.example.com/tls:/var/hyperledger/orderer/tls
       # Genesis block (will be generated later)
       - ./channel-artifacts/genesis.block:/var/hyperledger/orderer/orderer.genesis.block
+      # ----------------- CRITICAL FIX: Add Peer TLS -----------------
+      - ./crypto-config/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt:/var/hyperledger/peer/tls/tlsca.org1.example.com-cert.pem
     networks:
       - basic-network
 
@@ -82,7 +86,7 @@ services:
       - CORE_PEER_LOCALMSPID=Org1MSP
       - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/server.crt
       - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/server.key
-      - CORE_PEER_TLS_ROOTCAS_FILE=/etc/hyperledger/fabric/tls/ca.crt
+      - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/ca.crt
       - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/msp
       # Peer Specific Config
       - CORE_PEER_ID=peer0.org1.example.com
@@ -98,6 +102,10 @@ services:
       # State Database (CouchDB is required for chaincode queries)
       - CORE_LEDGER_STATE_STATEDATABASE=CouchDB
       - CORE_LEDGER_STATE_COUCHDBCONFIG_COUCHDBADDRESS=couchdb0.org1.example.com:5984
+      # ---- ADD THESE TWO LINES ----
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME=admin
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD=adminpw
+      # -----------------------------
     ports:
       - "7051:7051" # Peer listen port
       - "7052:7052" # Chaincode listen port
@@ -123,7 +131,7 @@ services:
       - CORE_PEER_LOCALMSPID=Org1MSP
       - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/server.crt
       - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/server.key
-      - CORE_PEER_TLS_ROOTCAS_FILE=/etc/hyperledger/fabric/tls/ca.crt
+      - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/ca.crt
       - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/msp
       # Peer Specific Config
       - CORE_PEER_ID=peer1.org1.example.com
@@ -139,6 +147,10 @@ services:
       # State Database
       - CORE_LEDGER_STATE_STATEDATABASE=CouchDB
       - CORE_LEDGER_STATE_COUCHDBCONFIG_COUCHDBADDRESS=couchdb1.org1.example.com:5984
+      # ---- ADD THESE TWO LINES ----
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME=admin
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD=adminpw
+      # -----------------------------
     ports:
       - "8051:8051" # Peer listen port
       - "8052:8052" # Chaincode listen port
