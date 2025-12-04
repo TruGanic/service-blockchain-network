@@ -1,94 +1,5 @@
 # ---------------------------------------------------------------------------
-# "Profiles" - defines profiles for generating the genesis block and channel
-#             configuration transactions
-# ---------------------------------------------------------------------------
-Profiles:
-
-    # ---------------------------------------------------------------------------
-    # Orderer Genesis Profile
-    # Used to create the Orderer's genesis block (System Channel)
-    # ---------------------------------------------------------------------------
-    OrdererGenesis:
-        # Define the capabilities used for the Orderer system channel
-        Capabilities:
-            <<: *OrdererCapabilities
-        # Define the Raft consensus type
-        Orderer:
-            <<: *OrdererDefaults
-            Organizations:
-                - *Orderer
-            # Raft-specific configuration
-            Addresses:
-                - orderer.example.com:7050
-            BatchTimeout: 2s
-            BatchSize:
-                MaxMessageCount: 10
-                AbsoluteMaxBytes: 99 MB
-                PreferredMaxBytes: 512 KB
-            # Define the consenters for the Raft group
-            Consenters:
-                - Host: orderer.example.com
-                  Port: 7050
-                  ClientTLSCert: ../network-config/crypto-config/ordererOrganizations/example.com/orderers/orderer.example.com/tls/server.crt
-                  ServerTLSCert: ../network-config/crypto-config/ordererOrganizations/example.com/orderers/orderer.example.com/tls/server.crt
-        Consortiums:
-            SampleConsortium:
-                Organizations:
-                    - *Org1
-
-    # ---------------------------------------------------------------------------
-    # Application Channel Profile
-    # Used to create the application channel configuration transaction
-    # ---------------------------------------------------------------------------
-    ServiceChannel:
-        Consortium: SampleConsortium
-        # Define the capabilities used for the application channel
-        Capabilities:
-            <<: *ApplicationCapabilities
-        Application:
-            <<: *ApplicationDefaults
-            Organizations:
-                - *Org1
-
-# ---------------------------------------------------------------------------
-# "Organizations" - defines the organization membership service providers (MSPs)
-# ---------------------------------------------------------------------------
-Organizations:
-
-    - &Orderer
-        Name: OrdererMSP
-        ID: OrdererMSP
-        MSPDir: crypto-config/ordererOrganizations/example.com/msp
-        AnchorPeers: []
-
-    - &Org1
-        Name: Org1MSP
-        ID: Org1MSP
-        MSPDir: crypto-config/peerOrganizations/org1.example.com/msp
-        # Anchor Peer definition (used for inter-organization communication)
-        AnchorPeers:
-            - Host: peer0.org1.example.com
-              Port: 7051
-
-# ---------------------------------------------------------------------------
-# Defaults (Do Not Change)
-# ---------------------------------------------------------------------------
-OrdererDefaults:
-    OrdererType: etcdraft
-    Addresses:
-        - orderer.example.com:7050
-    BatchTimeout: 2s
-    BatchSize:
-        MaxMessageCount: 10
-        AbsoluteMaxBytes: 99 MB
-        PreferredMaxBytes: 512 KB
-    
-ApplicationDefaults:
-    Capabilities:
-        <<: *ApplicationCapabilities
-
-# ---------------------------------------------------------------------------
-# Capabilities (Defines feature level - V2_0 is standard)
+# 1. Capabilities
 # ---------------------------------------------------------------------------
 Capabilities:
     Channel: &ChannelCapabilities
@@ -97,3 +8,146 @@ Capabilities:
         V2_0: true
     Application: &ApplicationCapabilities
         V2_0: true
+
+# ---------------------------------------------------------------------------
+# 2. Defaults
+# ---------------------------------------------------------------------------
+# --- Channel Defaults (Fixes "no policies defined" error for Channel Group) ---
+Channel: &ChannelDefaults
+    Policies:
+        Readers:
+            Type: ImplicitMeta
+            Rule: "ANY Readers"
+        Writers:
+            Type: ImplicitMeta
+            Rule: "ANY Writers"
+        Admins:
+            Type: ImplicitMeta
+            Rule: "MAJORITY Admins"
+    Capabilities:
+        <<: *ChannelCapabilities
+
+# --- Orderer Defaults ---
+Orderer: &OrdererDefaults
+    OrdererType: etcdraft
+    Addresses:
+        - orderer.example.com:7050
+    BatchTimeout: 2s
+    BatchSize:
+        MaxMessageCount: 10
+        AbsoluteMaxBytes: 99 MB
+        PreferredMaxBytes: 512 KB
+    EtcdRaft:
+        Consenters: []
+    Policies:
+        Readers:
+            Type: ImplicitMeta
+            Rule: "ANY Readers"
+        Writers:
+            Type: ImplicitMeta
+            Rule: "ANY Writers"
+        Admins:
+            Type: ImplicitMeta
+            Rule: "MAJORITY Admins"
+        BlockValidation:
+            Type: ImplicitMeta
+            Rule: "ANY Writers"
+    Capabilities:
+        <<: *OrdererCapabilities
+
+# --- Application Defaults ---
+Application: &ApplicationDefaults
+    Organizations: []
+    Policies:
+        LifecycleEndorsement:
+            Type: ImplicitMeta
+            Rule: "MAJORITY Endorsement"
+        Endorsement:
+            Type: ImplicitMeta
+            Rule: "MAJORITY Endorsement"
+        Readers:
+            Type: ImplicitMeta
+            Rule: "ANY Readers"
+        Writers:
+            Type: ImplicitMeta
+            Rule: "ANY Writers"
+        Admins:
+            Type: ImplicitMeta
+            Rule: "MAJORITY Admins"
+    Capabilities:
+        <<: *ApplicationCapabilities
+
+# ---------------------------------------------------------------------------
+# 3. Organizations
+# ---------------------------------------------------------------------------
+Organizations:
+    - &OrdererOrg
+        Name: OrdererMSP
+        ID: OrdererMSP
+        MSPDir: crypto-config/ordererOrganizations/example.com/msp
+        Policies:
+            Readers:
+                Type: Signature
+                Rule: "OR('OrdererMSP.member')"
+            Writers:
+                Type: Signature
+                Rule: "OR('OrdererMSP.member')"
+            Admins:
+                Type: Signature
+                Rule: "OR('OrdererMSP.admin')"
+        AnchorPeers: []
+
+    - &Org1
+        Name: Org1MSP
+        ID: Org1MSP
+        MSPDir: crypto-config/peerOrganizations/org1.example.com/msp
+        Policies:
+            Readers:
+                Type: Signature
+                Rule: "OR('Org1MSP.admin', 'Org1MSP.peer', 'Org1MSP.client')"
+            Writers:
+                Type: Signature
+                Rule: "OR('Org1MSP.admin', 'Org1MSP.client')"
+            Admins:
+                Type: Signature
+                Rule: "OR('Org1MSP.admin')"
+            Endorsement:
+                Type: Signature
+                Rule: "OR('Org1MSP.peer')"
+        AnchorPeers:
+            - Host: peer0.org1.example.com
+              Port: 7051
+
+# ---------------------------------------------------------------------------
+# 4. Profiles
+# ---------------------------------------------------------------------------
+Profiles:
+
+    # --- Profile for Orderer Genesis Block ---
+    OrdererGenesis:
+        <<: *ChannelDefaults  # Inherits Channel Policies (Critical Fix)
+        Orderer:
+            <<: *OrdererDefaults
+            Organizations:
+                - *OrdererOrg
+            Addresses:
+                - orderer.example.com:7050
+            EtcdRaft:
+                Consenters:
+                    - Host: orderer.example.com
+                      Port: 7050
+                      ClientTLSCert: crypto-config/ordererOrganizations/example.com/orderers/orderer.example.com/tls/server.crt
+                      ServerTLSCert: crypto-config/ordererOrganizations/example.com/orderers/orderer.example.com/tls/server.crt
+        Consortiums:
+            ServiceConsortium:
+                Organizations:
+                    - *Org1
+
+    # --- Profile for Application Channel ---
+    ServiceChannel:
+        <<: *ChannelDefaults # Inherits Channel Policies
+        Consortium: ServiceConsortium
+        Application:
+            <<: *ApplicationDefaults
+            Organizations:
+                - *Org1
