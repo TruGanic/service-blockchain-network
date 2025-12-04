@@ -1,0 +1,35 @@
+# ---------------------------------------------------------------------------
+# "OrdererOrgs" - Definition of the orderer organization
+# ---------------------------------------------------------------------------
+OrdererOrgs:
+  - Name: Orderer
+    Domain: example.com
+    # Specify the defaults for the Orderer organization
+    Specs:
+      - Hostname: orderer
+# ---------------------------------------------------------------------------
+# "PeerOrgs" - Definition of the peer organizations
+# ---------------------------------------------------------------------------
+PeerOrgs:
+  # ---------------------------------------------------------------------------
+  # Org1 - The first participating organization
+  # ---------------------------------------------------------------------------
+  - Name: Org1
+    Domain: org1.example.com
+    # Define how many peers and users this organization should have
+    Template:
+      Count: 2
+      # Add default location for the Node OUs (Organizational Units)
+      # This is crucial for Fabric V2.x Identity classification
+      # 'client', 'peer', 'admin', 'orderer' included
+      NodeOUs:
+        Enable: true
+        ClientOUIdentifier:
+          Certificate: cacerts/ca.org1.example.com-cert.pem
+          OrganizationalUnitIdentifier: client
+        PeerOUIdentifier:
+          Certificate: cacerts/ca.org1.example.com-cert.pem
+          OrganizationalUnitIdentifier: peer
+    # Define users specific to this organization (in addition to the default Admin)
+    Users:
+      Count: 1

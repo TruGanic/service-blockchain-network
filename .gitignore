@@ -1,0 +1,9 @@
+# Ignore generated crypto material
+crypto-config/
+
+# Ignore generated channel artifacts
+channel-artifacts/
+
+# Ignore container logs and database files
+log/
+statedb/
