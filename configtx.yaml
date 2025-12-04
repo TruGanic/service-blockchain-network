@@ -1,0 +1,99 @@
+# ---------------------------------------------------------------------------
+# "Profiles" - defines profiles for generating the genesis block and channel
+#             configuration transactions
+# ---------------------------------------------------------------------------
+Profiles:
+
+    # ---------------------------------------------------------------------------
+    # Orderer Genesis Profile
+    # Used to create the Orderer's genesis block (System Channel)
+    # ---------------------------------------------------------------------------
+    OrdererGenesis:
+        # Define the capabilities used for the Orderer system channel
+        Capabilities:
+            <<: *OrdererCapabilities
+        # Define the Raft consensus type
+        Orderer:
+            <<: *OrdererDefaults
+            Organizations:
+                - *Orderer
+            # Raft-specific configuration
+            Addresses:
+                - orderer.example.com:7050
+            BatchTimeout: 2s
+            BatchSize:
+                MaxMessageCount: 10
+                AbsoluteMaxBytes: 99 MB
+                PreferredMaxBytes: 512 KB
+            # Define the consenters for the Raft group
+            Consenters:
+                - Host: orderer.example.com
+                  Port: 7050
+                  ClientTLSCert: ../network-config/crypto-config/ordererOrganizations/example.com/orderers/orderer.example.com/tls/server.crt
+                  ServerTLSCert: ../network-config/crypto-config/ordererOrganizations/example.com/orderers/orderer.example.com/tls/server.crt
+        Consortiums:
+            SampleConsortium:
+                Organizations:
+                    - *Org1
+
+    # ---------------------------------------------------------------------------
+    # Application Channel Profile
+    # Used to create the application channel configuration transaction
+    # ---------------------------------------------------------------------------
+    ServiceChannel:
+        Consortium: SampleConsortium
+        # Define the capabilities used for the application channel
+        Capabilities:
+            <<: *ApplicationCapabilities
+        Application:
+            <<: *ApplicationDefaults
+            Organizations:
+                - *Org1
+
+# ---------------------------------------------------------------------------
+# "Organizations" - defines the organization membership service providers (MSPs)
+# ---------------------------------------------------------------------------
+Organizations:
+
+    - &Orderer
+        Name: OrdererMSP
+        ID: OrdererMSP
+        MSPDir: crypto-config/ordererOrganizations/example.com/msp
+        AnchorPeers: []
+
+    - &Org1
+        Name: Org1MSP
+        ID: Org1MSP
+        MSPDir: crypto-config/peerOrganizations/org1.example.com/msp
+        # Anchor Peer definition (used for inter-organization communication)
+        AnchorPeers:
+            - Host: peer0.org1.example.com
+              Port: 7051
+
+# ---------------------------------------------------------------------------
+# Defaults (Do Not Change)
+# ---------------------------------------------------------------------------
+OrdererDefaults:
+    OrdererType: etcdraft
+    Addresses:
+        - orderer.example.com:7050
+    BatchTimeout: 2s
+    BatchSize:
+        MaxMessageCount: 10
+        AbsoluteMaxBytes: 99 MB
+        PreferredMaxBytes: 512 KB
+    
+ApplicationDefaults:
+    Capabilities:
+        <<: *ApplicationCapabilities
+
+# ---------------------------------------------------------------------------
+# Capabilities (Defines feature level - V2_0 is standard)
+# ---------------------------------------------------------------------------
+Capabilities:
+    Channel: &ChannelCapabilities
+        V2_0: true
+    Orderer: &OrdererCapabilities
+        V2_0: true
+    Application: &ApplicationCapabilities
+        V2_0: true
