@@ -106,6 +106,7 @@ services:
       - CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME=admin
       - CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD=adminpw
       # -----------------------------
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=service-blockchain_basic-network
     ports:
       - "7051:7051" # Peer listen port
       - "7052:7052" # Chaincode listen port
@@ -151,6 +152,7 @@ services:
       - CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME=admin
       - CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD=adminpw
       # -----------------------------
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=service-blockchain_basic-network
     ports:
       - "8051:8051" # Peer listen port
       - "8052:8052" # Chaincode listen port
@@ -211,7 +213,7 @@ services:
       - /var/run/docker.sock:/host/var/run/docker.sock # Mount Docker socket for chaincode lifecycle
       - ./:/opt/gopath/src/github.com/hyperledger/fabric/peer/
       - ./crypto-config:/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/
-      - ../chaincode-go:/opt/gopath/src/github.com/asiri/chaincode-go # Mount Chaincode source!
+      - ../chaincode-typescript:/opt/chaincode # Mount Chaincode source!
     depends_on:
       - orderer.example.com
       - peer0.org1.example.com
