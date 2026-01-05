@@ -1,4 +1,6 @@
 #!/bin/bash
+# deploy.sh
+# Deploys the TypeScript Chaincode
 
 # --- CONFIGURATION ---
 CC_NAME="transport"
@@ -7,16 +9,13 @@ CC_LANG="node"
 VERSION=$1
 SEQUENCE=$2
 
-# Check arguments
-if [ -z "$1" ] || [ -z "$2" ]; then
-  echo "Usage: ./deploy.sh <version> <sequence>"
-  echo "Example: ./deploy.sh 1.0 1"
-  exit 1
-fi
+print_step "Step 1: Packaging Chaincode (TypeScript)..."
+pushd $CC_SRC_PATH
+npm install
+npm run build
+popd
 
-# Import env.sh (Looking in the current directory)
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-source $DIR/env.sh
+peer lifecycle chaincode package ${CC_NAME}.tar.gz --path $CC_SRC_PATH --lang node --label ${CC_NAME}_${CC_VERSION}
 
 # --- NEW: ORGANIZATION SETUP ---
 # Create a dedicated directory for deployment artifacts
@@ -85,4 +84,4 @@ peer lifecycle chaincode commit \
 
 
 
-echo "## DEPLOYMENT COMPLETE ##"
+echo -e "${GREEN}Chaincode Deployment Complete!${NC}"
