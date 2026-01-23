@@ -106,7 +106,7 @@ services:
       - CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME=admin
       - CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD=adminpw
       # -----------------------------
-      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=service-blockchain_basic-network
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=service-blockchain-network_basic-network
     ports:
       - "7051:7051" # Peer listen port
       - "7052:7052" # Chaincode listen port
@@ -152,7 +152,7 @@ services:
       - CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME=admin
       - CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD=adminpw
       # -----------------------------
-      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=service-blockchain_basic-network
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=service-blockchain-network_basic-network
     ports:
       - "8051:8051" # Peer listen port
       - "8052:8052" # Chaincode listen port

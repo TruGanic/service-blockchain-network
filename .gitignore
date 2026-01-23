@@ -23,3 +23,5 @@ channel-artifacts/
 Fatal
 *.log
 log.txt
+
+bin/
