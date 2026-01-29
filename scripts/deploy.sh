@@ -1,104 +1,127 @@
 #!/bin/bash
-# deploy.sh - Deploys the TypeScript Chaincode
 
-# --- 1. AUTOMATIC PATH DETECTION & ENVIRONMENT LOADING ---
-# This finds the directory where this script resides (scripts/)
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# ==============================================================================
+#  AUTOMATED CHAINCODE DEPLOYMENT SCRIPT
+#  Scope: Farmer, Transporter, Retailer
+# ==============================================================================
 
-# Load env.sh using the absolute path
-if [ -f "$DIR/env.sh" ]; then
-    source "$DIR/env.sh"
-else
-    echo "ERROR: Could not find env.sh at $DIR/env.sh"
+# Default Variables
+CC_NAME="transport"
+CC_SRC_PATH="/opt/chaincode"
+CHANNEL_NAME="supplychainchannel"
+ORDERER_ADDRESS="orderer.supplychain.net:7050"
+ORDERER_TLS_CA="/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/supplychain.net/orderers/orderer.supplychain.net/msp/tlscacerts/tlsca.supplychain.net-cert.pem"
+
+# User Input for Versioning
+CC_VERSION=${1:-"1.0"}
+CC_SEQUENCE=${2:-"1"}
+
+echo "----------------------------------------------------------------"
+echo "  Deploying Chaincode: $CC_NAME"
+echo "  Version: $CC_VERSION"
+echo "  Sequence: $CC_SEQUENCE"
+echo "----------------------------------------------------------------"
+
+# Helper Function: Set Identity Globals
+setGlobals() {
+  ORG=$1
+  if [ "$ORG" == "farmer" ]; then
+    CORE_PEER_LOCALMSPID="FarmerMSP"
+    CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/farmer.supplychain.net/peers/peer0.farmer.supplychain.net/tls/ca.crt
+    CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/farmer.supplychain.net/users/Admin@farmer.supplychain.net/msp
+    CORE_PEER_ADDRESS=peer0.farmer.supplychain.net:7051
+  elif [ "$ORG" == "transporter" ]; then
+    CORE_PEER_LOCALMSPID="TransporterMSP"
+    CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/transporter.supplychain.net/peers/peer0.transporter.supplychain.net/tls/ca.crt
+    CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/transporter.supplychain.net/users/Admin@transporter.supplychain.net/msp
+    CORE_PEER_ADDRESS=peer0.transporter.supplychain.net:8051
+  elif [ "$ORG" == "retailer" ]; then
+    CORE_PEER_LOCALMSPID="RetailerMSP"
+    CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/retailer.supplychain.net/peers/peer0.retailer.supplychain.net/tls/ca.crt
+    CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/retailer.supplychain.net/users/Admin@retailer.supplychain.net/msp
+    CORE_PEER_ADDRESS=peer0.retailer.supplychain.net:9051
+  else
+    echo "Unknown Organization: $ORG"
+    exit 1
+  fi
+}
+
+# Wrapper for Docker Exec
+exec_cli() {
+  # $1 = Org, $2.. = Command
+  ORG=$1
+  shift
+  setGlobals $ORG
+  
+  docker exec \
+    -e CORE_PEER_LOCALMSPID=$CORE_PEER_LOCALMSPID \
+    -e CORE_PEER_TLS_ROOTCERT_FILE=$CORE_PEER_TLS_ROOTCERT_FILE \
+    -e CORE_PEER_MSPCONFIGPATH=$CORE_PEER_MSPCONFIGPATH \
+    -e CORE_PEER_ADDRESS=$CORE_PEER_ADDRESS \
+    cli "$@"
+}
+
+# 1. Package Chaincode
+echo "Packaging Chaincode..."
+docker exec cli peer lifecycle chaincode package ${CC_NAME}.tar.gz \
+  --path ${CC_SRC_PATH} --lang node --label ${CC_NAME}_${CC_VERSION} >&log.txt
+res=$?
+if [ $res -ne 0 ]; then echo "Failed to package chaincode"; cat log.txt; exit 1; fi
+echo "Success: Chaincode Packaged."
+
+# 2. Install on All Peers
+for org in farmer transporter retailer; do
+  echo "Installing on $org..."
+  exec_cli $org peer lifecycle chaincode install ${CC_NAME}.tar.gz >&log.txt
+  res=$?
+  
+  if [ $res -ne 0 ]; then
+    # Check if the error is just "Already installed"
+    if grep -q "already successfully installed" log.txt; then
+      echo "  Warning: Chaincode already installed on $org. Continuing..."
+    else
+      echo "Failed to install on $org"; cat log.txt; exit 1;
+    fi
+  else
+    echo "Success: Installed on $org."
+  fi
+done
+
+# 3. Query Package ID (Auto-Extraction)
+echo "Querying Package ID..."
+# We query the farmer to get the ID
+setGlobals farmer
+CC_PACKAGE_ID=$(docker exec -e CORE_PEER_LOCALMSPID=$CORE_PEER_LOCALMSPID -e CORE_PEER_TLS_ROOTCERT_FILE=$CORE_PEER_TLS_ROOTCERT_FILE -e CORE_PEER_MSPCONFIGPATH=$CORE_PEER_MSPCONFIGPATH -e CORE_PEER_ADDRESS=$CORE_PEER_ADDRESS cli peer lifecycle chaincode queryinstalled | grep ${CC_NAME}_${CC_VERSION} | sed -n 's/.*Package ID: //; s/, Label:.*//p')
+echo "Package ID: $CC_PACKAGE_ID"
+
+if [ -z "$CC_PACKAGE_ID" ]; then
+    echo "Error: Package ID not found."
     exit 1
 fi
 
-# --- 2. CONFIGURATION ---
-CC_NAME="transport"          # Ensure this matches the 'name' in your package.json!
-CC_SRC_PATH="/opt/chaincode" # Points to the mapped volume
-CC_LANG="node"
-VERSION=$1
-SEQUENCE=$2
+# 4. Approve for All Orgs
+for org in farmer transporter retailer; do
+  echo "Approving for $org..."
+  exec_cli $org peer lifecycle chaincode approveformyorg -o $ORDERER_ADDRESS \
+    --ordererTLSHostnameOverride orderer.supplychain.net --tls --cafile $ORDERER_TLS_CA \
+    --channelID $CHANNEL_NAME --name $CC_NAME --version $CC_VERSION \
+    --package-id $CC_PACKAGE_ID --sequence $CC_SEQUENCE >&log.txt
+  res=$?
+  if [ $res -ne 0 ]; then echo "Failed to approve for $org"; cat log.txt; exit 1; fi
+  echo "Success: Approved for $org."
+done
 
-# Check inputs
-if [ -z "$VERSION" ]; then
-  echo "Usage: ./deploy.sh <VERSION> <SEQUENCE>"
-  exit 1
-fi
+# 5. Commit Chaincode (Combined Command)
+echo "Committing Chaincode..."
+docker exec cli peer lifecycle chaincode commit -o $ORDERER_ADDRESS \
+  --ordererTLSHostnameOverride orderer.supplychain.net --tls --cafile $ORDERER_TLS_CA \
+  --channelID $CHANNEL_NAME --name $CC_NAME --version $CC_VERSION --sequence $CC_SEQUENCE \
+  --peerAddresses peer0.farmer.supplychain.net:7051 --tlsRootCertFiles /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/farmer.supplychain.net/peers/peer0.farmer.supplychain.net/tls/ca.crt \
+  --peerAddresses peer0.transporter.supplychain.net:8051 --tlsRootCertFiles /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/transporter.supplychain.net/peers/peer0.transporter.supplychain.net/tls/ca.crt \
+  --peerAddresses peer0.retailer.supplychain.net:9051 --tlsRootCertFiles /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/retailer.supplychain.net/peers/peer0.retailer.supplychain.net/tls/ca.crt >&log.txt
 
-echo "## Starting Deployment of $CC_NAME v$VERSION (Sequence $SEQUENCE) ##"
-
-# --- 3. PREPARE DEPLOYMENTS FOLDER ---
-# Use absolute path based on script location to avoid confusion
-DEPLOY_DIR="$DIR/../deployments"
-mkdir -p "$DEPLOY_DIR"
-PACKAGE_PATH="$DEPLOY_DIR/${CC_NAME}_${VERSION}.tar.gz"
-
-# --- STEP 1: PACKAGE ---
-echo "--- Step 1: Packaging Chaincode ---"
-# We assume the code is ALREADY built on the host. We just package it.
-peer lifecycle chaincode package ${PACKAGE_PATH} \
-  --path ${CC_SRC_PATH} --lang ${CC_LANG} --label ${CC_NAME}_${VERSION}
-
-if [ ! -f "$PACKAGE_PATH" ]; then
-    echo "Failed to create package at $PACKAGE_PATH"
-    exit 1
-fi
-echo "Package created at: $PACKAGE_PATH"
-
-# --- STEP 2: INSTALL ON PEER 0 ---
-echo "--- Step 2: Installing on Peer0 ---"
-setGlobals 0
-peer lifecycle chaincode install ${PACKAGE_PATH}
-
-# --- STEP 3: INSTALL ON PEER 1 ---
-echo "--- Step 3: Installing on Peer1 ---"
-setGlobals 1
-peer lifecycle chaincode install ${PACKAGE_PATH}
-
-# --- STEP 4: GET PACKAGE ID ---
-echo "--- Step 4: Querying Package ID ---"
-setGlobals 0
-peer lifecycle chaincode queryinstalled >&log.txt
-# Extract the Package ID for the specific label we just installed
-PACKAGE_ID=$(sed -n "/${CC_NAME}_${VERSION}/{s/^Package ID: //; s/, Label:.*$//; p;}" log.txt)
-
-if [ -z "$PACKAGE_ID" ]; then
-    echo "Error: Package ID not found. Installation may have failed."
-    # Print the log to see what happened
-    cat log.txt
-    exit 1
-fi
-echo "Package ID is: $PACKAGE_ID"
-
-# --- STEP 5: APPROVE ---
-echo "--- Step 5: Approving for Org1 ---"
-setGlobals 0
-peer lifecycle chaincode approveformyorg \
-  -o orderer.example.com:7050 --tls --cafile $ORDERER_CA \
-  --channelID $CHANNEL_NAME --name $CC_NAME --version $VERSION \
-  --package-id $PACKAGE_ID --sequence $SEQUENCE \
-  --init-required --signature-policy "OR('Org1MSP.member')"
-
-echo "Waiting for approval..."
-sleep 3
-
-# --- STEP 6: COMMIT ---
-echo "--- Step 6: Committing Chaincode ---"
-peer lifecycle chaincode commit \
-  -o orderer.example.com:7050 --tls --cafile $ORDERER_CA \
-  --channelID $CHANNEL_NAME --name $CC_NAME --version $VERSION \
-  --sequence $SEQUENCE --init-required --signature-policy "OR('Org1MSP.member')" \
-  --peerAddresses peer0.org1.example.com:7051 --tlsRootCertFiles $PEER0_ORG1_CA \
-  --peerAddresses peer1.org1.example.com:8051 --tlsRootCertFiles $PEER1_ORG1_CA
-
-# --- STEP 7: INIT ---
-echo "--- Step 7: Initializing Ledger ---"
-peer chaincode invoke \
-  -o orderer.example.com:7050 --tls --cafile $ORDERER_CA \
-  -C $CHANNEL_NAME -n $CC_NAME \
-  --peerAddresses peer0.org1.example.com:7051 --tlsRootCertFiles $PEER0_ORG1_CA \
-  --peerAddresses peer1.org1.example.com:8051 --tlsRootCertFiles $PEER1_ORG1_CA \
-  --isInit -c '{"function":"InitLedger","Args":[]}'
-
-echo "================ DEPLOYMENT COMPLETE ================"
+res=$?
+if [ $res -ne 0 ]; then echo "Failed to commit chaincode"; cat log.txt; exit 1; fi
+echo "----------------------------------------------------------------"
+echo "  Success! Chaincode $CC_NAME version $CC_VERSION deployed."
+echo "----------------------------------------------------------------"
