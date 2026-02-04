@@ -1,5 +1,90 @@
 # ---------------------------------------------------------------------------
-# 1. Capabilities
+# 1. Organizations
+# ---------------------------------------------------------------------------
+Organizations:
+    - &OrdererOrg
+        Name: OrdererMSP
+        ID: OrdererMSP
+        MSPDir: crypto-config/ordererOrganizations/supplychain.net/msp
+        Policies:
+            Readers:
+                Type: Signature
+                Rule: "OR('OrdererMSP.member')"
+            Writers:
+                Type: Signature
+                Rule: "OR('OrdererMSP.member')"
+            Admins:
+                Type: Signature
+                Rule: "OR('OrdererMSP.member')"
+        AnchorPeers:
+            - Host: orderer.supplychain.net
+              Port: 7050
+
+    - &FarmerOrg
+        Name: FarmerMSP
+        ID: FarmerMSP
+        MSPDir: crypto-config/peerOrganizations/farmer.supplychain.net/msp
+        Policies:
+            Readers:
+                Type: Signature
+                Rule: "OR('FarmerMSP.admin', 'FarmerMSP.peer', 'FarmerMSP.client')"
+            Writers:
+                Type: Signature
+                Rule: "OR('FarmerMSP.admin', 'FarmerMSP.client')"
+            Admins:
+                Type: Signature
+                Rule: "OR('FarmerMSP.admin')"
+            Endorsement:
+                Type: Signature
+                Rule: "OR('FarmerMSP.peer')"
+        AnchorPeers:
+            - Host: peer0.farmer.supplychain.net
+              Port: 7051
+
+    - &TransporterOrg
+        Name: TransporterMSP
+        ID: TransporterMSP
+        MSPDir: crypto-config/peerOrganizations/transporter.supplychain.net/msp
+        Policies:
+            Readers:
+                Type: Signature
+                Rule: "OR('TransporterMSP.admin', 'TransporterMSP.peer', 'TransporterMSP.client')"
+            Writers:
+                Type: Signature
+                Rule: "OR('TransporterMSP.admin', 'TransporterMSP.client')"
+            Admins:
+                Type: Signature
+                Rule: "OR('TransporterMSP.admin')"
+            Endorsement:
+                Type: Signature
+                Rule: "OR('TransporterMSP.peer')"
+        AnchorPeers:
+            - Host: peer0.transporter.supplychain.net
+              Port: 8051
+
+    - &RetailerOrg
+        Name: RetailerMSP
+        ID: RetailerMSP
+        MSPDir: crypto-config/peerOrganizations/retailer.supplychain.net/msp
+        Policies:
+            Readers:
+                Type: Signature
+                Rule: "OR('RetailerMSP.admin', 'RetailerMSP.peer', 'RetailerMSP.client')"
+            Writers:
+                Type: Signature
+                Rule: "OR('RetailerMSP.admin', 'RetailerMSP.client')"
+            Admins:
+                Type: Signature
+                Rule: "OR('RetailerMSP.admin')"
+            Endorsement:
+                Type: Signature
+                Rule: "OR('RetailerMSP.peer')"
+        AnchorPeers:
+            - Host: peer0.retailer.supplychain.net
+              Port: 9051
+
+# ---------------------------------------------------------------------------
+# 2. Capabilities & Defaults
 # ---------------------------------------------------------------------------
 Capabilities:
     Channel: &ChannelCapabilities
@@ -9,53 +94,6 @@ Capabilities:
     Application: &ApplicationCapabilities
         V2_0: true
 
-# ---------------------------------------------------------------------------
-# 2. Defaults
-# ---------------------------------------------------------------------------
-# --- Channel Defaults (Fixes "no policies defined" error for Channel Group) ---
-Channel: &ChannelDefaults
-    Policies:
-        Readers:
-            Type: ImplicitMeta
-            Rule: "ANY Readers"
-        Writers:
-            Type: ImplicitMeta
-            Rule: "ANY Writers"
-        Admins:
-            Type: ImplicitMeta
-            Rule: "MAJORITY Admins"
-    Capabilities:
-        <<: *ChannelCapabilities
-
-# --- Orderer Defaults ---
-Orderer: &OrdererDefaults
-    OrdererType: etcdraft
-    Addresses:
-        - orderer.example.com:7050
-    BatchTimeout: 2s
-    BatchSize:
-        MaxMessageCount: 10
-        AbsoluteMaxBytes: 99 MB
-        PreferredMaxBytes: 512 KB
-    EtcdRaft:
-        Consenters: []
-    Policies:
-        Readers:
-            Type: ImplicitMeta
-            Rule: "ANY Readers"
-        Writers:
-            Type: ImplicitMeta
-            Rule: "ANY Writers"
-        Admins:
-            Type: ImplicitMeta
-            Rule: "MAJORITY Admins"
-        BlockValidation:
-            Type: ImplicitMeta
-            Rule: "ANY Writers"
-    Capabilities:
-        <<: *OrdererCapabilities
-
-# --- Application Defaults ---
 Application: &ApplicationDefaults
     Organizations: []
     Policies:
@@ -77,77 +115,80 @@ Application: &ApplicationDefaults
     Capabilities:
         <<: *ApplicationCapabilities
 
-# ---------------------------------------------------------------------------
-# 3. Organizations
-# ---------------------------------------------------------------------------
-Organizations:
-    - &OrdererOrg
-        Name: OrdererMSP
-        ID: OrdererMSP
-        MSPDir: crypto-config/ordererOrganizations/example.com/msp
-        Policies:
-            Readers:
-                Type: Signature
-                Rule: "OR('OrdererMSP.member')"
-            Writers:
-                Type: Signature
-                Rule: "OR('OrdererMSP.member')"
-            Admins:
-                Type: Signature
-                Rule: "OR('OrdererMSP.member')"
-        AnchorPeers: []
+Orderer: &OrdererDefaults
+    OrdererType: etcdraft
+    Addresses:
+        - orderer.supplychain.net:7050
+    EtcdRaft:
+        Consenters:
+        - Host: orderer.supplychain.net
+          Port: 7050
+          ClientTLSCert: crypto-config/ordererOrganizations/supplychain.net/orderers/orderer.supplychain.net/tls/server.crt
+          ServerTLSCert: crypto-config/ordererOrganizations/supplychain.net/orderers/orderer.supplychain.net/tls/server.crt
+    BatchTimeout: 2s
+    BatchSize:
+        MaxMessageCount: 10
+        AbsoluteMaxBytes: 99 MB
+        PreferredMaxBytes: 512 KB
+    Policies:
+        Readers:
+            Type: ImplicitMeta
+            Rule: "ANY Readers"
+        Writers:
+            Type: ImplicitMeta
+            Rule: "ANY Writers"
+        Admins:
+            Type: ImplicitMeta
+            Rule: "MAJORITY Admins"
+        BlockValidation:
+            Type: ImplicitMeta
+            Rule: "ANY Writers"
+    Capabilities:
+        <<: *OrdererCapabilities
 
-    - &Org1
-        Name: Org1MSP
-        ID: Org1MSP
-        MSPDir: crypto-config/peerOrganizations/org1.example.com/msp
-        Policies:
-            Readers:
-                Type: Signature
-                Rule: "OR('Org1MSP.member')"
-            Writers:
-                Type: Signature
-                Rule: "OR('Org1MSP.member')"
-            Admins:
-                Type: Signature
-                Rule: "OR('Org1MSP.member')"
-            Endorsement:
-                Type: Signature
-                Rule: "OR('Org1MSP.member')"
-        AnchorPeers:
-            - Host: peer0.org1.example.com
-              Port: 7051
+Channel: &ChannelDefaults
+    Policies:
+        Readers:
+            Type: ImplicitMeta
+            Rule: "ANY Readers"
+        Writers:
+            Type: ImplicitMeta
+            Rule: "ANY Writers"
+        Admins:
+            Type: ImplicitMeta
+            Rule: "MAJORITY Admins"
+    Capabilities:
+        <<: *ChannelCapabilities
 
 # ---------------------------------------------------------------------------
-# 4. Profiles
+# 3. Profiles
 # ---------------------------------------------------------------------------
 Profiles:
-
-    # --- Profile for Orderer Genesis Block ---
-    OrdererGenesis:
-        <<: *ChannelDefaults  # Inherits Channel Policies (Critical Fix)
+    # System Channel Genesis Block
+    SupplyChainGenesis:
+        <<: *ChannelDefaults
         Orderer:
             <<: *OrdererDefaults
             Organizations:
                 - *OrdererOrg
-            Addresses:
-                - orderer.example.com:7050
-            EtcdRaft:
-                Consenters:
-                    - Host: orderer.example.com
-                      Port: 7050
-                      ClientTLSCert: crypto-config/ordererOrganizations/example.com/orderers/orderer.example.com/tls/server.crt
-                      ServerTLSCert: crypto-config/ordererOrganizations/example.com/orderers/orderer.example.com/tls/server.crt
+            Capabilities:
+                <<: *OrdererCapabilities
         Consortiums:
-            ServiceConsortium:
+            SupplyChainConsortium:
                 Organizations:
-                    - *Org1
+                    - *FarmerOrg
+                    - *TransporterOrg
+                    - *RetailerOrg
 
-    # --- Profile for Application Channel ---
-    ServiceChannel:
-        <<: *ChannelDefaults # Inherits Channel Policies
-        Consortium: ServiceConsortium
+    # Application Channel Transaction
+    SupplyChainChannel:
+        <<: *ChannelDefaults
+        Consortium: SupplyChainConsortium
         Application:
             <<: *ApplicationDefaults
             Organizations:
-                - *Org1
+                - *FarmerOrg
+                - *TransporterOrg
+                - *RetailerOrg
+            Capabilities:
+                <<: *ApplicationCapabilities

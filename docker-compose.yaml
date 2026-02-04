@@ -1,0 +1,297 @@
+version: '3.8'
+
+networks:
+  basic-network:
+
+services:
+  # =====================================================================
+  # 1. FARMER ORGANIZATION (Source - Port 70xx)
+  # =====================================================================
+  
+  # Farmer CA
+  ca_farmer:
+    image: hyperledger/fabric-ca:${CA_VERSION:-1.5.7}
+    hostname: ca.farmer.supplychain.net
+    environment:
+      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca
+      - FABRIC_CA_SERVER_CA_NAME=ca-farmer
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_TLS_CERTFILE=/etc/hyperledger/fabric-ca/crypto/ca/tlsca.farmer.supplychain.net-cert.pem
+      - FABRIC_CA_SERVER_TLS_KEYFILE=/etc/hyperledger/fabric-ca/crypto/ca/tlsca.farmer.supplychain.net-key.pem
+      - FABRIC_CA_SERVER_OPERATIONS_LISTENADDRESS=0.0.0.0:14001
+    ports:
+      - "7054:7054"
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    volumes:
+      - ./crypto-config/peerOrganizations/farmer.supplychain.net/ca/:/etc/hyperledger/fabric-ca/crypto/ca/
+    container_name: ca.farmer.supplychain.net
+    networks:
+      - basic-network
+
+  # Farmer Peer
+  peer0.farmer.supplychain.net:
+    container_name: peer0.farmer.supplychain.net
+    image: hyperledger/fabric-peer:${FABRIC_VERSION:-2.5.4}
+    hostname: peer0.farmer.supplychain.net
+    environment:
+      - FABRIC_LOGGING_SPEC=INFO
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_LOCALMSPID=FarmerMSP
+      - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/server.crt
+      - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/server.key
+      - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/ca.crt
+      - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/msp
+      - CORE_PEER_ID=peer0.farmer.supplychain.net
+      - CORE_PEER_ADDRESS=peer0.farmer.supplychain.net:7051
+      - CORE_PEER_LISTENADDRESS=0.0.0.0:7051
+      - CORE_PEER_CHAINCODEADDRESS=peer0.farmer.supplychain.net:7052
+      - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:7052
+      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer0.farmer.supplychain.net:7051
+      - CORE_PEER_GOSSIP_USELEADERELECTION=true
+      - CORE_PEER_GOSSIP_ORGLEADER=false
+      - CORE_LEDGER_STATE_STATEDATABASE=CouchDB
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_COUCHDBADDRESS=couchdb.farmer:5984
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME=admin
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD=adminpw
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=service-blockchain-network_basic-network
+    ports:
+      - "7051:7051"
+      - "7052:7052"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./crypto-config/peerOrganizations/farmer.supplychain.net/peers/peer0.farmer.supplychain.net/msp:/etc/hyperledger/fabric/msp
+      - ./crypto-config/peerOrganizations/farmer.supplychain.net/peers/peer0.farmer.supplychain.net/tls:/etc/hyperledger/fabric/tls
+    depends_on:
+      - couchdb.farmer
+    networks:
+      - basic-network
+
+  # Farmer DB
+  couchdb.farmer:
+    container_name: couchdb.farmer
+    image: couchdb:3.3.3
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=adminpw
+    ports:
+      - "5984:5984"
+    networks:
+      - basic-network
+
+  # =====================================================================
+  # 2. TRANSPORTER ORGANIZATION (Logistics - Port 80xx)
+  # =====================================================================
+
+  # Transporter CA
+  ca_transporter:
+    image: hyperledger/fabric-ca:${CA_VERSION:-1.5.7}
+    hostname: ca.transporter.supplychain.net
+    environment:
+      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca
+      - FABRIC_CA_SERVER_CA_NAME=ca-transporter
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_TLS_CERTFILE=/etc/hyperledger/fabric-ca/crypto/ca/tlsca.transporter.supplychain.net-cert.pem
+      - FABRIC_CA_SERVER_TLS_KEYFILE=/etc/hyperledger/fabric-ca/crypto/ca/tlsca.transporter.supplychain.net-key.pem
+      - FABRIC_CA_SERVER_OPERATIONS_LISTENADDRESS=0.0.0.0:14001
+    ports:
+      - "8054:7054" # Port 8054
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    volumes:
+      - ./crypto-config/peerOrganizations/transporter.supplychain.net/ca/:/etc/hyperledger/fabric-ca/crypto/ca/
+    container_name: ca.transporter.supplychain.net
+    networks:
+      - basic-network
+
+  # Transporter Peer
+  peer0.transporter.supplychain.net:
+    container_name: peer0.transporter.supplychain.net
+    image: hyperledger/fabric-peer:${FABRIC_VERSION:-2.5.4}
+    hostname: peer0.transporter.supplychain.net
+    environment:
+      - FABRIC_LOGGING_SPEC=INFO
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_LOCALMSPID=TransporterMSP
+      - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/server.crt
+      - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/server.key
+      - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/ca.crt
+      - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/msp
+      - CORE_PEER_ID=peer0.transporter.supplychain.net
+      - CORE_PEER_ADDRESS=peer0.transporter.supplychain.net:8051 # Internal 8051
+      - CORE_PEER_LISTENADDRESS=0.0.0.0:8051
+      - CORE_PEER_CHAINCODEADDRESS=peer0.transporter.supplychain.net:8052
+      - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:8052
+      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer0.transporter.supplychain.net:8051
+      - CORE_PEER_GOSSIP_USELEADERELECTION=true
+      - CORE_PEER_GOSSIP_ORGLEADER=false
+      - CORE_LEDGER_STATE_STATEDATABASE=CouchDB
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_COUCHDBADDRESS=couchdb.transporter:5984
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME=admin
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD=adminpw
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=service-blockchain-network_basic-network
+    ports:
+      - "8051:8051" # Port 8051
+      - "8052:8052"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./crypto-config/peerOrganizations/transporter.supplychain.net/peers/peer0.transporter.supplychain.net/msp:/etc/hyperledger/fabric/msp
+      - ./crypto-config/peerOrganizations/transporter.supplychain.net/peers/peer0.transporter.supplychain.net/tls:/etc/hyperledger/fabric/tls
+    depends_on:
+      - couchdb.transporter
+    networks:
+      - basic-network
+
+  # Transporter DB
+  couchdb.transporter:
+    container_name: couchdb.transporter
+    image: couchdb:3.3.3
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=adminpw
+    ports:
+      - "6984:5984" # Distinct Host Port
+    networks:
+      - basic-network
+
+  # =====================================================================
+  # 3. RETAILER ORGANIZATION (Target - Port 90xx)
+  # =====================================================================
+
+  # Retailer CA
+  ca_retailer:
+    image: hyperledger/fabric-ca:${CA_VERSION:-1.5.7}
+    hostname: ca.retailer.supplychain.net
+    environment:
+      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca
+      - FABRIC_CA_SERVER_CA_NAME=ca-retailer
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_TLS_CERTFILE=/etc/hyperledger/fabric-ca/crypto/ca/tlsca.retailer.supplychain.net-cert.pem
+      - FABRIC_CA_SERVER_TLS_KEYFILE=/etc/hyperledger/fabric-ca/crypto/ca/tlsca.retailer.supplychain.net-key.pem
+      - FABRIC_CA_SERVER_OPERATIONS_LISTENADDRESS=0.0.0.0:14001
+    ports:
+      - "9054:7054" # Port 9054
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    volumes:
+      - ./crypto-config/peerOrganizations/retailer.supplychain.net/ca/:/etc/hyperledger/fabric-ca/crypto/ca/
+    container_name: ca.retailer.supplychain.net
+    networks:
+      - basic-network
+
+  # Retailer Peer
+  peer0.retailer.supplychain.net:
+    container_name: peer0.retailer.supplychain.net
+    image: hyperledger/fabric-peer:${FABRIC_VERSION:-2.5.4}
+    hostname: peer0.retailer.supplychain.net
+    environment:
+      - FABRIC_LOGGING_SPEC=INFO
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_LOCALMSPID=RetailerMSP
+      - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/server.crt
+      - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/server.key
+      - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/ca.crt
+      - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/msp
+      - CORE_PEER_ID=peer0.retailer.supplychain.net
+      - CORE_PEER_ADDRESS=peer0.retailer.supplychain.net:9051
+      - CORE_PEER_LISTENADDRESS=0.0.0.0:9051
+      - CORE_PEER_CHAINCODEADDRESS=peer0.retailer.supplychain.net:9052
+      - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:9052
+      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer0.retailer.supplychain.net:9051
+      - CORE_PEER_GOSSIP_USELEADERELECTION=true
+      - CORE_PEER_GOSSIP_ORGLEADER=false
+      - CORE_LEDGER_STATE_STATEDATABASE=CouchDB
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_COUCHDBADDRESS=couchdb.retailer:5984
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_USERNAME=admin
+      - CORE_LEDGER_STATE_COUCHDBCONFIG_PASSWORD=adminpw
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=service-blockchain-network_basic-network
+    ports:
+      - "9051:9051" # Port 9051
+      - "9052:9052"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./crypto-config/peerOrganizations/retailer.supplychain.net/peers/peer0.retailer.supplychain.net/msp:/etc/hyperledger/fabric/msp
+      - ./crypto-config/peerOrganizations/retailer.supplychain.net/peers/peer0.retailer.supplychain.net/tls:/etc/hyperledger/fabric/tls
+    depends_on:
+      - couchdb.retailer
+    networks:
+      - basic-network
+
+  # Retailer DB
+  couchdb.retailer:
+    container_name: couchdb.retailer
+    image: couchdb:3.3.3
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=adminpw
+    ports:
+      - "7984:5984" # Distinct Host Port
+    networks:
+      - basic-network
+
+  # =====================================================================
+  # 4. ORDERING SERVICE
+  # =====================================================================
+  orderer.supplychain.net:
+    container_name: orderer.supplychain.net
+    image: hyperledger/fabric-orderer:${FABRIC_VERSION:-2.5.4}
+    hostname: orderer.supplychain.net
+    environment:
+      - FABRIC_LOGGING_SPEC=INFO
+      - ORDERER_GENERAL_BOOTSTRAPMETHOD=file
+      - ORDERER_GENERAL_BOOTSTRAPFILE=/var/hyperledger/orderer/orderer.genesis.block
+      - ORDERER_GENERAL_LISTENADDRESS=0.0.0.0
+      - ORDERER_GENERAL_LISTENPORT=7050
+      - ORDERER_GENERAL_TLS_ENABLED=true
+      - ORDERER_GENERAL_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_GENERAL_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      # CRITICAL: Trust TLS certs from ALL THREE orgs
+      - ORDERER_GENERAL_TLS_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt, /var/hyperledger/peer/tls/tlsca.farmer.supplychain.net-cert.pem, /var/hyperledger/peer/tls/tlsca.transporter.supplychain.net-cert.pem, /var/hyperledger/peer/tls/tlsca.retailer.supplychain.net-cert.pem]
+      - ORDERER_GENERAL_CLUSTER_CLIENTCERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_GENERAL_CLUSTER_CLIENTPRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_GENERAL_CLUSTER_ROOTCAS=[/var/hyperledger/orderer/tls/ca.crt]
+      - ORDERER_GENERAL_LOCALMSPID=OrdererMSP
+      - ORDERER_GENERAL_LOCALMSPDIR=/var/hyperledger/orderer/msp
+    working_dir: /opt/gopath/src/github.com/hyperledger/fabric
+    command: orderer
+    ports:
+      - "7050:7050"
+    volumes:
+      - ./crypto-config/ordererOrganizations/supplychain.net/orderers/orderer.supplychain.net/msp:/var/hyperledger/orderer/msp
+      - ./crypto-config/ordererOrganizations/supplychain.net/orderers/orderer.supplychain.net/tls:/var/hyperledger/orderer/tls
+      - ./channel-artifacts/genesis.block:/var/hyperledger/orderer/orderer.genesis.block
+      # Mapping TLS certs
+      - ./crypto-config/peerOrganizations/farmer.supplychain.net/peers/peer0.farmer.supplychain.net/tls/ca.crt:/var/hyperledger/peer/tls/tlsca.farmer.supplychain.net-cert.pem
+      - ./crypto-config/peerOrganizations/transporter.supplychain.net/peers/peer0.transporter.supplychain.net/tls/ca.crt:/var/hyperledger/peer/tls/tlsca.transporter.supplychain.net-cert.pem
+      - ./crypto-config/peerOrganizations/retailer.supplychain.net/peers/peer0.retailer.supplychain.net/tls/ca.crt:/var/hyperledger/peer/tls/tlsca.retailer.supplychain.net-cert.pem
+    networks:
+      - basic-network
+
+  # =====================================================================
+  # 5. CLI (Admin Tool)
+  # =====================================================================
+  cli:
+    container_name: cli
+    image: hyperledger/fabric-tools:${FABRIC_VERSION:-2.5.4}
+    tty: true
+    stdin_open: true
+    environment:
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+      - FABRIC_LOGGING_SPEC=INFO
+      - CORE_PEER_LOCALMSPID=FarmerMSP
+      - CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/farmer.supplychain.net/users/Admin@farmer.supplychain.net/msp
+      - CORE_PEER_ADDRESS=peer0.farmer.supplychain.net:7051
+      - CORE_PEER_TLS_ROOTCAS_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/farmer.supplychain.net/peers/peer0.farmer.supplychain.net/tls/ca.crt
+      - CORE_PEER_TLS_ENABLED=true
+    working_dir: /opt/gopath/src/github.com/hyperledger/fabric/peer
+    command: /bin/bash
+    volumes:
+      - /var/run/docker.sock:/host/var/run/docker.sock
+      - ./:/opt/gopath/src/github.com/hyperledger/fabric/peer/
+      - ./crypto-config:/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/
+      # TypeScript Chaincode Path
+      - ../chaincode-typescript:/opt/chaincode
+    depends_on:
+      - orderer.supplychain.net
+      - peer0.farmer.supplychain.net
+      - peer0.transporter.supplychain.net
+      - peer0.retailer.supplychain.net
+    networks:
+      - basic-network
